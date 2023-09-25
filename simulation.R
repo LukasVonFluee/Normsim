@@ -1,21 +1,14 @@
 # Title: Threshold simulation model for paper: "When norm change hurts"
 # Authors: Charles Efferson, Sönke Ehret, Lukas von Flüe, and Sonja Vogt.
-
-# Simulation will be a function with the following parameters as arguments:
-
-# phi -> which we might want to vary: 0.25, 0.5, 0.75
-# a   -> which we might wan to vary: 0.25, 0.75
-# t_max
-# h, g -> where h > g. these are the payoffs for choosing Alt / SQ respectively.
-# alpha, beta -> beta distribution parameters.
-
 ################################################################################
-
 rm(list=ls())
 
-# package dependencies
-
-# library(ggplot2)
+# Simulation will be a function with the following parameters as arguments:
+#  alpha = c(3,8): beta distribution parameter
+#  target = c(0, 1): target=0 -> target N*phi most amenable
+#  phi = c(0.25, 0.5, 0.75): fraction of targeted agents
+#  a = c(0.25, 0.75): payoff parameter
+#  h = c(2,3): payoff for choosing Alt for targeted agents who actually switch
 
 ################################################################################
 
