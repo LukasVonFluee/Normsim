@@ -1,6 +1,21 @@
+###################################################################################
+# Title: Analysis of threshold simulation model for paper: "When norm change hurts"
+# Authors: Charles Efferson, Sönke Ehret, Lukas von Flüe, and Sonja Vogt.
+###################################################################################
+
+# Package dependencies:
+
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  # Install ggplot2 if not already installed
+  install.packages("ggplot2")
+}
+
 library(ggplot2)
 
-# Base directory where subdirectories are located
+###################################################################################
+# Load data with file names corresponding to parameter combinations
+###################################################################################
+
 base_dir <- getwd()
 
 # List all subdirectories
@@ -19,56 +34,116 @@ for (subdir in subdirectories) {
     # Load the file into the current environment
     load(rdata_file)
     
-    # "result" is the name of the object saved in the .RData file
-    all_results[[rdata_file]] <- result
+    # Extract just the parameter combination name from the full path
+    param_name <- basename(dirname(rdata_file))
+    
+    # Save the result with the parameter name
+    all_results[[param_name]] <- result
   }
 }
 
-# Plots:
+###################################################################################
+# Load results:
 
-# To start, let's compare two specific results from the loaded 'all_results'
-param_comb1 <- all_results[["/Users/lukasvonflue/Desktop/Normsim/alpha_3_target_0_phi_0.75_a_0.75_h_2/alpha_3_target_0_phi_0.75_a_0.75_h_2.RData"]] 
-param_comb2 <- all_results[["/Users/lukasvonflue/Desktop/Normsim/alpha_3_target_1_phi_0.75_a_0.75_h_2/alpha_3_target_1_phi_0.75_a_0.75_h_2.RData"]] 
+alpha3_target0_phi75_a75_h2 <- all_results[["alpha_3_target_0_phi_0.75_a_0.75_h_2"]]
 
-# Extract the necessary arrays and compute miscoordination
-extract_data <- function(result) {
-  summary_results <- result$summary_results
-  
-  freq_coord_alt <- summary_results$freq_coord_alt
-  freq_coord_sq <- summary_results$freq_coord_sq
-  freq_alt <- summary_results$freq_alt
-  freq_sq <- summary_results$freq_sq
-  avg_payoff_alt <- summary_results$avg_payoff_alt
-  avg_payoff_sq <- summary_results$avg_payoff_sq
-  
-  miscoordination <- (N/2) - freq_coord_alt - freq_coord_sq
-  
-  return(data.frame(freq_coord_alt = freq_coord_alt,
-                    freq_coord_sq = freq_coord_sq,
-                    freq_alt = freq_alt,
-                    freq_sq = freq_sq,
-                    avg_payoff_alt = avg_payoff_alt,
-                    avg_payoff_sq = avg_payoff_sq,
-                    miscoordination = miscoordination))
-}
+###################################################################################
+# Create additional variables of interest
+###################################################################################
 
-data1 <- extract_data(param_comb1)
-data1$param_comb <- "param_comb1"
-data2 <- extract_data(param_comb2)
-data2$param_comb <- "param_comb2"
+# Fraction of targeted agents who actually switched:
+response_fract_alpha3_target0_phi75_a75_h2 <- sum(alpha3_target0_phi75_a75_h2$agent_output[,"respond",1,]) / (N*phi) / n_sim
 
-# Combine the data for the two parameter combinations
-combined_data <- rbind(data1, data2)
+# Frequency of miscoordination
+alpha3_target0_phi75_a75_h2$summary_results$miscoordination <- 
+  (N/2) - 
+  alpha3_target0_phi75_a75_h2$summary_results$freq_coord_sq - 
+  alpha3_target0_phi75_a75_h2$summary_results$freq_coord_alt
 
-# Reshape the data for ggplot
-data_long <- tidyr::gather(combined_data, measure, value, -param_comb)
+# Long-run fractions of agents choosing Alt vs SQ (I calculate average of "long_t" last periods)
+long_t <- t_max / 10
+long_run_fract_alt <- mean(alpha3_target0_phi75_a75_h2$summary_results$freq_alt[(t_max - long_t + 1):t_max])
+long_run_fract_sq <- mean(alpha3_target0_phi75_a75_h2$summary_results$freq_sq[(t_max - long_t + 1):t_max])
 
-# Add a new time_step variable to the data_long dataframe
-data_long$time_step <- rep(1:nrow(data1), times = length(unique(data_long$measure)) * 2)
 
-# Plotting with ggplot2
-ggplot(data_long, aes(x = time_step, y = value, color = param_comb, group = interaction(param_comb, measure))) +
+# Expected payoff:
+
+
+###################################################################################
+###################################################################################
+# Plots
+###################################################################################
+###################################################################################
+
+###################################################################################
+# Plotting frequencies of coordination and miscoordination
+###################################################################################
+freq_coordination <- alpha3_target0_phi75_a75_h2$summary_results %>%
+  pivot_longer(cols = c(freq_coord_alt, freq_coord_sq, miscoordination), names_to = "type", values_to = "value")
+
+ggplot(freq_coordination, aes(x = rep(1:101, times = 3), y = value, color = type)) +
   geom_line() +
-  facet_wrap(~ measure, scales = "free_y") + 
-  labs(y = "Value", x = "Period", title = "Comparison of Two Parameter Combinations") +
+  labs(title = "Frequency of (mis)coordination", x = "Period", y = "Frequency") +
   theme_minimal()
+
+###################################################################################
+# Plotting frequencies of coordination and miscoordination as fractions
+###################################################################################
+alpha3_target0_phi75_a75_h2$summary_results$fract_coord_alt <- 
+  alpha3_target0_phi75_a75_h2$summary_results$freq_coord_alt / (alpha3_target0_phi75_a75_h2$summary_results$freq_coord_alt 
+                                                                + alpha3_target0_phi75_a75_h2$summary_results$freq_coord_sq
+                                                                +alpha3_target0_phi75_a75_h2$summary_results$miscoordination)
+
+alpha3_target0_phi75_a75_h2$summary_results$fract_coord_sq <- 
+  alpha3_target0_phi75_a75_h2$summary_results$freq_coord_sq / (alpha3_target0_phi75_a75_h2$summary_results$freq_coord_alt 
+                                                                 + alpha3_target0_phi75_a75_h2$summary_results$freq_coord_sq
+                                                                 +alpha3_target0_phi75_a75_h2$summary_results$miscoordination)
+
+alpha3_target0_phi75_a75_h2$summary_results$fract_miscoordination <- 
+  alpha3_target0_phi75_a75_h2$summary_results$miscoordination / (alpha3_target0_phi75_a75_h2$summary_results$freq_coord_alt 
+                                                                 + alpha3_target0_phi75_a75_h2$summary_results$freq_coord_sq
+                                                                 +alpha3_target0_phi75_a75_h2$summary_results$miscoordination)
+
+fract_coordination <- alpha3_target0_phi75_a75_h2$summary_results %>%
+  pivot_longer(cols = c(fract_coord_alt, fract_coord_sq, fract_miscoordination), names_to = "type", values_to = "value")
+
+ggplot(fract_coordination, aes(x = rep(1:101, times = 3), y = value, color = type)) +
+  geom_line() +
+  labs(title = "Fractions", x = "Period", y = "Fractions (mis)coordination") +
+  theme_minimal()
+
+###################################################################################
+# Plotting frequencies of choices
+###################################################################################
+freq_choices <- alpha3_target0_phi75_a75_h2$summary_results %>%
+  pivot_longer(cols = c(freq_alt, freq_sq), names_to = "type", values_to = "value")
+
+ggplot(freq_choices, aes(x = rep(1:101, times = 2), y = value, color = type)) +
+  geom_line() +
+  labs(title = "Frequencies of SQ and Alt choices", x = "Period", y = "Frequency") +
+  theme_minimal()
+
+###################################################################################
+# Plotting frequencies of choices as fractions
+###################################################################################
+alpha3_target0_phi75_a75_h2$summary_results$fract_alt <- alpha3_target0_phi75_a75_h2$summary_results$freq_alt / N
+alpha3_target0_phi75_a75_h2$summary_results$fract_sq <- alpha3_target0_phi75_a75_h2$summary_results$freq_sq / N
+
+fract_choices <- alpha3_target0_phi75_a75_h2$summary_results %>%
+  pivot_longer(cols = c(fract_alt, fract_sq), names_to = "type", values_to = "value")
+
+ggplot(fract_choices, aes(x = rep(1:101, times = 2), y = value, color = type)) +
+  geom_line() +
+  labs(title = "Fractions of SQ and Alt choices", x = "Period", y = "Fractions") +
+  theme_minimal()
+
+
+###################################################################################
+# Plotting expected payoffs
+###################################################################################
+
+
+
+
+
+

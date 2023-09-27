@@ -49,7 +49,9 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
                              freq_sq=rep(0,t_max+1),
                              freq_alt=rep(0,t_max+1),
                              avg_payoff_sq=rep(0,t_max+1),
-                             avg_payoff_alt=rep(0,t_max+1))
+                             avg_payoff_alt=rep(0,t_max+1),
+                             exp_sq=rep(0,t_max+1),
+                             exp_alt=rep(0,t_max+1))
   
   # Before intervention, we assume everyone chooses SQ:
   summary_results$freq_coord_sq[1] <- N/2
@@ -88,6 +90,16 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   # Record average payoffs of this period before intervention:
   summary_results$avg_payoff_sq[1] <- sum(agent[which(agent$choice==0),"payoff"])/length(agent[which(agent$choice==0),"choice"])
   summary_results$avg_payoff_alt[1] <- 0
+  
+  # Further, assuming we're in an SQ equilibrium, we have that q=0 and we can
+  # calculate expected payoffs:
+  q <- 0
+  agent$exp_sq <- ((1-q)*(a + agent$x_i)) + (q*(b+agent$x_i))
+  agent$exp_alt <- (1-q)*a + q*d
+
+  # Record average expected payoffs of this period before intervention:
+  summary_results$exp_sq[1] <- sum(agent$exp_sq)/N
+  summary_results$exp_alt[1] <- sum(agent$exp_alt)/N
   
   # Initialize array to record agents' traits in every period:
   num_traits <- length(agent[1,])   # number of traits
@@ -153,6 +165,10 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     agent[which(agent$respond==0),"exp_sq"] <- ((1-q)*(a + agent[which(agent$respond==0),"x_i"])) + (q*(b+agent[which(agent$respond==0),"x_i"]))
     agent[which(agent$respond==0),"exp_alt"] <- (1-q)*a + q*d
     
+    # Record average expected payoffs of this period:
+    summary_results$exp_sq[1+t] <- sum(agent$exp_sq)/N
+    summary_results$exp_alt[1+t] <- sum(agent$exp_alt)/N
+    
     # Determine choice based on expected payoffs. Note: An agent chooses Alt if
     # exp_alt >= exp_sq:
     agent$choice <- ifelse(agent$exp_alt>=agent$exp_sq, 1, 0)
@@ -215,13 +231,25 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     # Record summary results
     summary_results$freq_sq[1+t] <- length(agent[which(agent$choice==0),"choice"])
     summary_results$freq_alt[1+t] <- length(agent[which(agent$choice==1),"choice"])
-    summary_results$avg_payoff_sq[1+t] <- sum(agent[which(agent$choice==0),"payoff"])/length(agent[which(agent$choice==0),"choice"])
-    summary_results$avg_payoff_alt[1+t] <- ifelse(sum(agent[which(agent$choice==1),"payoff"])/length(agent[which(agent$choice==1),"choice"])>0,sum(agent[which(agent$choice==1),"payoff"])/length(agent[which(agent$choice==1),"choice"]),0)
     
+    num_agents_sq <- length(agent[which(agent$choice==0),"choice"])
+    if (num_agents_sq > 0) {
+      summary_results$avg_payoff_sq[1+t] <- sum(agent[which(agent$choice==0),"payoff"]) / num_agents_sq
+    } else {
+      summary_results$avg_payoff_sq[1+t] <- 0
+    }
+    
+    num_agents_alt <- length(agent[which(agent$choice==1),"choice"])
+    if (num_agents_alt > 0) {
+      summary_results$avg_payoff_alt[1+t] <- sum(agent[which(agent$choice==1),"payoff"]) / num_agents_alt
+    } else {
+      summary_results$avg_payoff_alt[1+t] <- 0
+    }
+  
   }
   
   # Return the required data frames, and some parameter values in a list:
-  return(list(summary_results=summary_results, agent_output=agent_output, N=N, t_max=t_max))
+  return(list(summary_results=summary_results, agent_output=agent_output, N=N, t_max=t_max, alpha=alpha, target=target, phi=phi, a=a, h=h))
   
 }
 
@@ -253,10 +281,10 @@ param_combinations <- expand.grid(
 # where we draw random values from a uniform distribution to determine which 
 # agents actually respond to the intervention.
 
-N <- 1000
+N <- 100
 t_max <- 100
 num_traits <- 6 # nr. of agents' traits needed to initialize averaged data frame
-n_sim <- 20 # nr. of simulation runs
+n_sim <- 5 # nr. of simulation runs
 
 results_list <- list()  # to store results for each parameter combination
 
@@ -269,9 +297,23 @@ for (i in 1:nrow(param_combinations)) {
                                 freq_sq=rep(0,t_max+1),
                                 freq_alt=rep(0,t_max+1),
                                 avg_payoff_sq=rep(0,t_max+1),
-                                avg_payoff_alt=rep(0,t_max+1))
+                                avg_payoff_alt=rep(0,t_max+1),
+                                exp_sq=rep(0,t_max+1),
+                                exp_alt=rep(0,t_max+1))
   
   all_agent_output <- array(0, dim = c(N, num_traits, 1+t_max,n_sim))
+  
+  # rename columns
+  dimnames(all_agent_output) <- list(
+    agent = as.character(1:N),
+    trait = c("x_i", "respond", "exp_sq", "exp_alt", "choice", "payoff"),
+    period = 1:(1+t_max),
+    n_sim = 1:n_sim
+  )
+  
+  # Check the dimnames
+  # dimnames(all_agent_output)
+  
   
   for (j in 1:n_sim) {
     results <- sim(N=N, t_max=t_max,
@@ -281,12 +323,22 @@ for (i in 1:nrow(param_combinations)) {
                    a=current_params$a, 
                    h=current_params$h)
     
+    N <- N
+    t_max <- t_max
+    alpha <- current_params$alpha
+    target <- current_params$target 
+    phi <- current_params$phi 
+    a <- current_params$a 
+    h <- current_params$h
+    
     avg_summary_results$freq_coord_sq <- avg_summary_results$freq_coord_sq + results$summary_results$freq_coord_sq
     avg_summary_results$freq_coord_alt <- avg_summary_results$freq_coord_alt + results$summary_results$freq_coord_alt
     avg_summary_results$freq_sq <- avg_summary_results$freq_sq + results$summary_results$freq_sq
     avg_summary_results$freq_alt <- avg_summary_results$freq_alt + results$summary_results$freq_alt
     avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq + results$summary_results$avg_payoff_sq
     avg_summary_results$avg_payoff_alt <- avg_summary_results$avg_payoff_alt + results$summary_results$avg_payoff_alt
+    avg_summary_results$exp_sq <- avg_summary_results$exp_sq + results$summary_results$exp_sq
+    avg_summary_results$exp_alt <- avg_summary_results$exp_alt + results$summary_results$exp_alt
     
     all_agent_output[,,,j] <- results$agent_output
     
@@ -298,9 +350,13 @@ for (i in 1:nrow(param_combinations)) {
   avg_summary_results$freq_alt <- avg_summary_results$freq_alt / n_sim
   avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq / n_sim 
   avg_summary_results$avg_payoff_alt <- avg_summary_results$avg_payoff_alt / n_sim
+  avg_summary_results$exp_sq <- avg_summary_results$exp_sq / n_sim 
+  avg_summary_results$exp_alt <- avg_summary_results$exp_alt / n_sim
   
   # Store the average results in results_list:
-  results_list[[i]] <- list(summary_results = avg_summary_results, agent_output = all_agent_output, N=N, t_max=t_max)
+  results_list[[i]] <- list(summary_results = avg_summary_results, agent_output = all_agent_output, 
+                            n_sim=n_sim, N=N, t_max=t_max, num_traits= num_traits, alpha=alpha, target=target,
+                            phi=phi, a=a, h=h)
 }
 
 ################################################################################
