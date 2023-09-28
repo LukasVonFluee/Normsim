@@ -1,3 +1,4 @@
+################################################################################
 # Title: Threshold simulation model for paper: "When norm change hurts"
 # Authors: Charles Efferson, Sönke Ehret, Lukas von Flüe, and Sonja Vogt.
 ################################################################################
@@ -288,6 +289,7 @@ n_sim <- 5 # nr. of simulation runs
 
 results_list <- list()  # to store results for each parameter combination
 
+# Go through all the different parameter combinations
 for (i in 1:nrow(param_combinations)) {
   
   current_params <- param_combinations[i, ]
@@ -301,6 +303,8 @@ for (i in 1:nrow(param_combinations)) {
                                 exp_sq=rep(0,t_max+1),
                                 exp_alt=rep(0,t_max+1))
   
+  # Initialize an array that will hold all agent_outputs from the individual
+  # simulation runs (note, we conduct "n_sim" runs):
   all_agent_output <- array(0, dim = c(N, num_traits, 1+t_max,n_sim))
   
   # rename columns
@@ -314,7 +318,7 @@ for (i in 1:nrow(param_combinations)) {
   # Check the dimnames
   # dimnames(all_agent_output)
   
-  
+  # Run n_sim simulations:
   for (j in 1:n_sim) {
     results <- sim(N=N, t_max=t_max,
                    alpha=current_params$alpha,
@@ -344,6 +348,8 @@ for (i in 1:nrow(param_combinations)) {
     
   }
   
+  # After running n_sim simulations for a given parameter combination, we take
+  # averages of all the measures (averaged over n_sim):
   avg_summary_results$freq_coord_sq <- avg_summary_results$freq_coord_sq / n_sim 
   avg_summary_results$freq_coord_alt <- avg_summary_results$freq_coord_alt / n_sim
   avg_summary_results$freq_sq <- avg_summary_results$freq_sq / n_sim 
@@ -353,7 +359,7 @@ for (i in 1:nrow(param_combinations)) {
   avg_summary_results$exp_sq <- avg_summary_results$exp_sq / n_sim 
   avg_summary_results$exp_alt <- avg_summary_results$exp_alt / n_sim
   
-  # Store the average results in results_list:
+  # Store averaged results and parameter values of given parameter combination in results_list:
   results_list[[i]] <- list(summary_results = avg_summary_results, agent_output = all_agent_output, 
                             n_sim=n_sim, N=N, t_max=t_max, num_traits= num_traits, alpha=alpha, target=target,
                             phi=phi, a=a, h=h)
@@ -361,7 +367,7 @@ for (i in 1:nrow(param_combinations)) {
 
 ################################################################################
 ################################################################################
-# Create names for files with parameter combinations:
+# Create names for files according to parameter combinations:
 name_combination <- function(row) {
   paste0("alpha_", row["alpha"],
          "_target_", row["target"], 
@@ -372,13 +378,21 @@ name_combination <- function(row) {
 
 names(results_list) <- apply(param_combinations, 1, name_combination)
 
+# Replace '.' and '_' with '' (remove them)
+cleaned_names <- lapply(names(results_list), function(name) {
+  return(gsub("[._]", "", name))
+})
+
+cleaned_names <- unlist(cleaned_names)
+
 # Get current working directory
 results_dir <- getwd() 
 
-# Iterate through the results_list and save each result separately
+# Iterate through the results_list and save each result separately in 
+# subdirectory corresponding to parameter combinations:
 for(i in 1:length(results_list)) {
   # Name for the subdirectory (and the file) based on the names of results_list
-  folder_and_file_name <- names(results_list)[i]
+  folder_and_file_name <- cleaned_names[i]
   
   # Check if directory exists and create it if it doesn't
   if (!dir.exists(folder_and_file_name)) {
@@ -391,7 +405,7 @@ for(i in 1:length(results_list)) {
   # Full path to where the file will be saved (inside the subdirectory)
   file_path <- file.path(results_dir, folder_and_file_name, file_name)
   
-  # Convert list item to an environment
+  # Convert list item to an environment (had some issues before doing it this way)
   e <- list2env(list(result = results_list[[i]]))
   
   # Save the environment
