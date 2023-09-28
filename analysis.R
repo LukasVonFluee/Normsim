@@ -170,6 +170,12 @@ for (i in 1:length(all_results)) {
                        labels = c("Fraction of Alt", "Fraction of SQ")) +
     theme_minimal()
   
+  # Construct the filename with directory path
+  filename <- file.path(names(all_results)[i], "fract_choices.png")
+  
+  # Save the plot
+  ggsave(filename = filename, plot = plot)
+  
 }
 
 
