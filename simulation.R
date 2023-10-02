@@ -4,6 +4,24 @@
 ################################################################################
 rm(list=ls())
 
+################################################################################
+
+# Package dependencies:
+
+# "dineq" package to calculate Gini Coefficient.
+# Source: https://search.r-project.org/CRAN/refmans/dineq/html/gini.wtd.html
+# References: 
+#   Haughton, J. and S. Khandker. (2009) Handbook on poverty and inequality, Washington, DC: World Bank.
+#   Cowell F. (2000) Measurement of Inequality. In Atkinson A. and Bourguignon F. (eds.) Handbook of Income Distribution. Amsterdam: Elsevier, p. 87-166.
+
+if (!requireNamespace("dineq", quietly = TRUE)) {
+  install.packages("dineq")
+}
+
+library(dineq)
+
+################################################################################
+
 # Simulation will be a function with the following parameters as arguments:
 #  alpha = c(3,8): beta distribution parameter
 #  target = c(0, 1): target=0 = target N*phi most amenable, where N = nr. agents
@@ -45,14 +63,16 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   g <- 0 # payoff for choosing SQ for targeted agents who switch
   
   # Initialize data frame in which we store coordination results
-  summary_results <- data.frame(freq_coord_sq=rep(0,t_max+1), 
-                             freq_coord_alt=rep(0,t_max+1),
-                             freq_sq=rep(0,t_max+1),
-                             freq_alt=rep(0,t_max+1),
-                             avg_payoff_sq=rep(0,t_max+1),
-                             avg_payoff_alt=rep(0,t_max+1),
-                             exp_sq=rep(0,t_max+1),
-                             exp_alt=rep(0,t_max+1))
+  summary_results <- data.frame(freq_coord_sq=rep(0,t_max), 
+                             freq_coord_alt=rep(0,t_max),
+                             freq_sq=rep(0,t_max),
+                             freq_alt=rep(0,t_max),
+                             avg_payoff_sq=rep(0,t_max),
+                             avg_payoff_alt=rep(0,t_max),
+                             avg_payoff=rep(0,t_max),
+                             gini_coefficient=rep(0,t_max),
+                             exp_sq=rep(0,t_max),
+                             exp_alt=rep(0,t_max))
   
   # Before intervention, we assume everyone chooses SQ:
   summary_results$freq_coord_sq[1] <- N/2
@@ -68,9 +88,9 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   # "exp_alt" = expected payoff for choosing Alt
   # "choice" = choice between SQ and Alt, where choice=0 means choosing SQ
   # "payoff" = payoff after playing coordination game in a given period
-  agent <- data.frame(x_i = rep(NA, N), respond = rep(NA, N), 
-                      exp_sq = rep(NA, N), exp_alt = rep(NA, N), 
-                      choice = rep(0, N), payoff = rep(NA, N))
+  agent <- data.frame(x_i = rep(0, N), respond = rep(0, N), 
+                      exp_sq = rep(0, N), exp_alt = rep(0), 
+                      choice = rep(0, N), payoff = rep(0, N))
   
   # Draw x_i values from a left-skewed beta distribution such that for a majority 
   # of agents it is true that x_i > (d-b)/2.
@@ -83,41 +103,48 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   # ggplot(data = data.frame(x = agent$x_i), aes(x)) +
   #   geom_density() +
   #   labs(title = "Density Plot of x_i", x = "x_i", y = "Density")
-
-  # Given we assume everyone chooses SQ before intervention, we assign initial 
-  # payoffs accordingly (note: payoff for coordinating on SQ: a+x_i):
-  agent$payoff <- a + agent$x_i
-  
-  # Record average payoffs of this period before intervention:
-  summary_results$avg_payoff_sq[1] <- sum(agent[which(agent$choice==0),"payoff"])/length(agent[which(agent$choice==0),"choice"])
-  summary_results$avg_payoff_alt[1] <- 0
-  
-  # Further, assuming we're in an SQ equilibrium, we have that q=0 and we can
+  # 
+  # In an SQ equilibrium, q=0 and we have the following expected payoffs:
   # calculate expected payoffs:
   q <- 0
   agent$exp_sq <- ((1-q)*(a + agent$x_i)) + (q*(b+agent$x_i))
   agent$exp_alt <- (1-q)*a + q*d
-
+  
   # Record average expected payoffs of this period before intervention:
   summary_results$exp_sq[1] <- sum(agent$exp_sq)/N
   summary_results$exp_alt[1] <- sum(agent$exp_alt)/N
   
-  # Initialize array to record agents' traits in every period:
+  # In an SQ equilibrium all agents coordinate on SQ and we calculate payoffs
+  # accordingly (note: payoff for coordinating on SQ: a+x_i):
+  agent$payoff <- a + agent$x_i
+  
+  # Record average payoffs of this period before intervention:
+  summary_results$avg_payoff_sq[1] <- sum(agent[which(agent$choice==0),"payoff"])/length(agent[which(agent$choice==0),"choice"])
+  summary_results$avg_payoff_alt[1] <- NA
+  summary_results$avg_payoff[1] <- sum(agent[,"payoff"])/N
+  
+  # Record (unweighted) Gini Coefficient for this first period before intervention:
+  summary_results$gini_coefficient[1] <- gini.wtd(agent[,"payoff"])
+  
+  # Initialize array to record agents' traits over all periods:
   num_traits <- length(agent[1,])   # number of traits
-  agent_output <- array(NA, dim = c(N, num_traits, 1+t_max))
+  agent_output <- array(0, dim = c(N, num_traits, t_max))
   
   # rename columns
   dimnames(agent_output) <- list(
     agent = as.character(1:N),
     trait = c("x_i", "respond", "exp_sq", "exp_alt", "choice", "payoff"),
-    period = 1:(1+t_max)
+    period = 1:t_max
   )
   
   # Check the dimnames
   # dimnames(agent_output)
   
+  # Record agent data frame with x values and payoffs before intervention:
+  agent_output[,,1] <- as.matrix(agent)
+    
   #############################################################################  
-
+  
   # Intervention (note, if target=0, we target amenable, else resistant)
   if (target==0) {
     # print("target=0")
@@ -144,12 +171,9 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   # Mark those agents who actually responded to intervention and switched to Alt
   agent$respond <- agent$choice
   
-  # Record agent data frame with x values and payoffs before intervention:
-  agent_output[,,1] <- as.matrix(agent)
-    
   #############################################################################  
   
-  for (t in 1:t_max) {
+  for (t in 2:t_max) {
     
     # Determine belief q based on choice distribution of previous period:
     q <- mean(agent$choice)
@@ -167,8 +191,8 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     agent[which(agent$respond==0),"exp_alt"] <- (1-q)*a + q*d
     
     # Record average expected payoffs of this period:
-    summary_results$exp_sq[1+t] <- sum(agent$exp_sq)/N
-    summary_results$exp_alt[1+t] <- sum(agent$exp_alt)/N
+    summary_results$exp_sq[t] <- sum(agent$exp_sq)/N
+    summary_results$exp_alt[t] <- sum(agent$exp_alt)/N
     
     # Determine choice based on expected payoffs. Note: An agent chooses Alt if
     # exp_alt >= exp_sq:
@@ -194,8 +218,8 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     freq_coord_alt <- sum(both_alt)
     
     # Store results in 'summary_results' data frame:
-    summary_results$freq_coord_sq[1+t] <- freq_coord_sq
-    summary_results$freq_coord_alt[1+t] <- freq_coord_alt
+    summary_results$freq_coord_sq[t] <- freq_coord_sq
+    summary_results$freq_coord_alt[t] <- freq_coord_alt
     
     # Calculate payoffs:
     payoff_player_1 <- numeric(N/2)
@@ -211,12 +235,12 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     payoff_player_2[both_alt] <- d
     
     # If player 1 chooses SQ and player 2 chooses Alt:
-    payoff_player_1[choice_player_1 == 0 & choice_player_2 == 1] <- agent$x_i[player_1][choice_player_1 == 0 & choice_player_2 == 1] + b
+    payoff_player_1[choice_player_1 == 0 & choice_player_2 == 1] <- b + agent$x_i[player_1][choice_player_1 == 0 & choice_player_2 == 1] 
     payoff_player_2[choice_player_1 == 0 & choice_player_2 == 1] <- a
     
     # If player 1 chooses Alt and player 2 chooses SQ:
     payoff_player_1[choice_player_1 == 1 & choice_player_2 == 0] <- a
-    payoff_player_2[choice_player_1 == 1 & choice_player_2 == 0] <- agent$x_i[player_2][choice_player_1 == 1 & choice_player_2 == 0] + b
+    payoff_player_2[choice_player_1 == 1 & choice_player_2 == 0] <- b + agent$x_i[player_2][choice_player_1 == 1 & choice_player_2 == 0] 
     
     # Register payoffs in agent data frame
     agent[player_1,"payoff"] <- payoff_player_1
@@ -227,30 +251,32 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     agent[which(agent$respond==1),"payoff"] <- h
   
     # Record agent data:
-    agent_output[,,1+t] <- as.matrix(agent)
+    agent_output[,,t] <- as.matrix(agent)
     
     # Record summary results
-    summary_results$freq_sq[1+t] <- length(agent[which(agent$choice==0),"choice"])
-    summary_results$freq_alt[1+t] <- length(agent[which(agent$choice==1),"choice"])
     
+    # Record frequencies of choices:
+    summary_results$freq_sq[t] <- length(agent[which(agent$choice==0),"choice"])
+    summary_results$freq_alt[t] <- length(agent[which(agent$choice==1),"choice"])
+    
+    # Record average payoffs:
     num_agents_sq <- length(agent[which(agent$choice==0),"choice"])
-    if (num_agents_sq > 0) {
-      summary_results$avg_payoff_sq[1+t] <- sum(agent[which(agent$choice==0),"payoff"]) / num_agents_sq
-    } else {
-      summary_results$avg_payoff_sq[1+t] <- 0
-    }
+    summary_results$avg_payoff_sq[t] <- ifelse(num_agents_sq>0,sum(agent[which(agent$choice==0),"payoff"]) / num_agents_sq,NA) 
+    
     
     num_agents_alt <- length(agent[which(agent$choice==1),"choice"])
-    if (num_agents_alt > 0) {
-      summary_results$avg_payoff_alt[1+t] <- sum(agent[which(agent$choice==1),"payoff"]) / num_agents_alt
-    } else {
-      summary_results$avg_payoff_alt[1+t] <- 0
-    }
-  
+    summary_results$avg_payoff_alt[t] <- ifelse(num_agents_alt>0,sum(agent[which(agent$choice==1),"payoff"]) / num_agents_alt,NA) 
+    
+    summary_results$avg_payoff[t] <- sum(agent[,"payoff"])/N
+    
+    # Calculate (unweighted) Gini Coefficient:
+    summary_results$gini_coefficient[t] <- gini.wtd(agent[,"payoff"])
+    
   }
   
   # Return the required data frames, and some parameter values in a list:
-  return(list(summary_results=summary_results, agent_output=agent_output, N=N, t_max=t_max, alpha=alpha, target=target, phi=phi, a=a, h=h))
+  return(list(summary_results=summary_results, # agent_output=agent_output, 
+              N=N, t_max=t_max, alpha=alpha, target=target, phi=phi, a=a, h=h))
   
 }
 
@@ -259,13 +285,12 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
 # The different parameter values to create all parameter combinations:
 
 param_combinations <- expand.grid(
-  alpha = c(3,8),
+  alpha = c(2.5, 3),
   target = c(0,1),
-  phi = c(0.25, 0.5, 0.75),
+  phi = c(0.5, 0.7, 0.9),
   a = c(0.25, 0.75),
   h = c(2,3)
 )
-
 
 ################################################################################
 ################################################################################
@@ -282,10 +307,10 @@ param_combinations <- expand.grid(
 # where we draw random values from a uniform distribution to determine which 
 # agents actually respond to the intervention.
 
-N <- 100
+N <- 1000
 t_max <- 100
 num_traits <- 6 # nr. of agents' traits needed to initialize averaged data frame
-n_sim <- 5 # nr. of simulation runs
+n_sim <- 30 # nr. of simulation runs
 
 results_list <- list()  # to store results for each parameter combination
 
@@ -294,26 +319,28 @@ for (i in 1:nrow(param_combinations)) {
   
   current_params <- param_combinations[i, ]
   
-  avg_summary_results <- data.frame(freq_coord_sq=rep(0,t_max+1), 
-                                freq_coord_alt=rep(0,t_max+1),
-                                freq_sq=rep(0,t_max+1),
-                                freq_alt=rep(0,t_max+1),
-                                avg_payoff_sq=rep(0,t_max+1),
-                                avg_payoff_alt=rep(0,t_max+1),
-                                exp_sq=rep(0,t_max+1),
-                                exp_alt=rep(0,t_max+1))
+  avg_summary_results <- data.frame(freq_coord_sq=rep(0,t_max), 
+                                freq_coord_alt=rep(0,t_max),
+                                freq_sq=rep(0,t_max),
+                                freq_alt=rep(0,t_max),
+                                avg_payoff_sq=rep(0,t_max),
+                                avg_payoff_alt=rep(0,t_max),
+                                avg_payoff=rep(0,t_max),
+                                gini_coefficient=rep(0,t_max),
+                                exp_sq=rep(0,t_max),
+                                exp_alt=rep(0,t_max))
   
   # Initialize an array that will hold all agent_outputs from the individual
   # simulation runs (note, we conduct "n_sim" runs):
-  all_agent_output <- array(0, dim = c(N, num_traits, 1+t_max,n_sim))
+  # all_agent_output <- array(0, dim = c(N, num_traits, t_max, n_sim))
   
   # rename columns
-  dimnames(all_agent_output) <- list(
-    agent = as.character(1:N),
-    trait = c("x_i", "respond", "exp_sq", "exp_alt", "choice", "payoff"),
-    period = 1:(1+t_max),
-    n_sim = 1:n_sim
-  )
+  # dimnames(all_agent_output) <- list(
+  #   agent = as.character(1:N),
+  #   trait = c("x_i", "respond", "exp_sq", "exp_alt", "choice", "payoff"),
+  #   period = 1:t_max,
+  #   n_sim = 1:n_sim
+  # )
   
   # Check the dimnames
   # dimnames(all_agent_output)
@@ -327,6 +354,11 @@ for (i in 1:nrow(param_combinations)) {
                    a=current_params$a, 
                    h=current_params$h)
     
+    # Density plot of x values:
+    # ggplot(data = data.frame(x = results$agent_output[,"x_i",1]), aes(x)) +
+    #   geom_density() +
+    #   labs(title = "Density Plot of x_i", x = "x_i", y = "Density")
+     
     N <- N
     t_max <- t_max
     alpha <- current_params$alpha
@@ -341,26 +373,30 @@ for (i in 1:nrow(param_combinations)) {
     avg_summary_results$freq_alt <- avg_summary_results$freq_alt + results$summary_results$freq_alt
     avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq + results$summary_results$avg_payoff_sq
     avg_summary_results$avg_payoff_alt <- avg_summary_results$avg_payoff_alt + results$summary_results$avg_payoff_alt
+    avg_summary_results$avg_payoff <- avg_summary_results$avg_payoff + results$summary_results$avg_payoff
+    avg_summary_results$gini_coefficient <- avg_summary_results$gini_coefficient + results$summary_results$gini_coefficient
     avg_summary_results$exp_sq <- avg_summary_results$exp_sq + results$summary_results$exp_sq
     avg_summary_results$exp_alt <- avg_summary_results$exp_alt + results$summary_results$exp_alt
     
-    all_agent_output[,,,j] <- results$agent_output
+    # all_agent_output[,,,j] <- results$agent_output
     
   }
   
   # After running n_sim simulations for a given parameter combination, we take
-  # averages of all the measures (averaged over n_sim):
+  # averages of all the measures:
   avg_summary_results$freq_coord_sq <- avg_summary_results$freq_coord_sq / n_sim 
   avg_summary_results$freq_coord_alt <- avg_summary_results$freq_coord_alt / n_sim
   avg_summary_results$freq_sq <- avg_summary_results$freq_sq / n_sim 
   avg_summary_results$freq_alt <- avg_summary_results$freq_alt / n_sim
   avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq / n_sim 
   avg_summary_results$avg_payoff_alt <- avg_summary_results$avg_payoff_alt / n_sim
+  avg_summary_results$avg_payoff <- avg_summary_results$avg_payoff / n_sim
+  avg_summary_results$gini_coefficient <- avg_summary_results$gini_coefficient / n_sim
   avg_summary_results$exp_sq <- avg_summary_results$exp_sq / n_sim 
   avg_summary_results$exp_alt <- avg_summary_results$exp_alt / n_sim
   
   # Store averaged results and parameter values of given parameter combination in results_list:
-  results_list[[i]] <- list(summary_results = avg_summary_results, agent_output = all_agent_output, 
+  results_list[[i]] <- list(summary_results = avg_summary_results, # agent_output = all_agent_output, 
                             n_sim=n_sim, N=N, t_max=t_max, num_traits= num_traits, alpha=alpha, target=target,
                             phi=phi, a=a, h=h)
 }
@@ -405,7 +441,7 @@ for(i in 1:length(results_list)) {
   # Full path to where the file will be saved (inside the subdirectory)
   file_path <- file.path(results_dir, folder_and_file_name, file_name)
   
-  # Convert list item to an environment (had some issues before doing it this way)
+  # Convert list item to an environment
   e <- list2env(list(result = results_list[[i]]))
   
   # Save the environment
