@@ -20,6 +20,12 @@ if (!requireNamespace("dineq", quietly = TRUE)) {
 
 library(dineq)
 
+# # For bootstrapping: 
+# if (!requireNamespace("boot", quietly = TRUE)) {
+#   install.packages("boot")
+# }
+# library(boot)
+
 ################################################################################
 
 # Simulation will be a function with the following parameters as arguments:
@@ -64,22 +70,24 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   
   # Initialize data frame in which we store coordination results
   summary_results <- data.frame(freq_coord_sq=rep(0,t_max), 
-                             freq_coord_alt=rep(0,t_max),
-                             freq_sq=rep(0,t_max),
-                             freq_alt=rep(0,t_max),
-                             avg_payoff_sq=rep(0,t_max),
-                             avg_payoff_alt=rep(0,t_max),
-                             avg_payoff=rep(0,t_max),
-                             gini_coefficient=rep(0,t_max),
-                             exp_sq=rep(0,t_max),
-                             exp_alt=rep(0,t_max))
+                                freq_coord_alt=rep(0,t_max),
+                                miscoordination=rep(0,t_max),
+                                freq_sq=rep(0,t_max),
+                                freq_alt=rep(0,t_max),
+                                avg_payoff_sq=rep(0,t_max),
+                                avg_payoff_alt=rep(0,t_max),
+                                avg_payoff=rep(0,t_max),
+                                gini_coefficient=rep(0,t_max),
+                                exp_sq=rep(0,t_max),
+                                exp_alt=rep(0,t_max))
   
   # Before intervention, we assume everyone chooses SQ:
   summary_results$freq_coord_sq[1] <- N/2
   summary_results$freq_coord_alt[1] <- 0
+  summary_results$miscoordination[1] <- 0
   summary_results$freq_sq[1] <- N
   summary_results$freq_alt[1] <- 0
-
+  
   # Initialize agents (note, we assume agents start from an equilibrium where 
   # everyone chooses SQ (choice=0)).
   # "x_i" = idiosyncratic x value
@@ -123,7 +131,7 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   summary_results$avg_payoff_alt[1] <- NA
   summary_results$avg_payoff[1] <- sum(agent[,"payoff"])/N
   
-  # Record (unweighted) Gini Coefficient for this first period before intervention:
+  # Record (unweighted) gini coefficient for this first period before intervention:
   summary_results$gini_coefficient[1] <- gini.wtd(agent[,"payoff"])
   
   # Initialize array to record agents' traits over all periods:
@@ -142,7 +150,7 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   
   # Record agent data frame with x values and payoffs before intervention:
   agent_output[,,1] <- as.matrix(agent)
-    
+  
   #############################################################################  
   
   # Intervention (note, if target=0, we target amenable, else resistant)
@@ -216,10 +224,10 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     both_alt <- choice_player_1 == 1 & choice_player_2 == 1
     freq_coord_sq <- sum(both_sq)
     freq_coord_alt <- sum(both_alt)
-    
     # Store results in 'summary_results' data frame:
     summary_results$freq_coord_sq[t] <- freq_coord_sq
     summary_results$freq_coord_alt[t] <- freq_coord_alt
+    summary_results$miscoordination[t] <- (N/2) - freq_coord_sq - freq_coord_alt
     
     # Calculate payoffs:
     payoff_player_1 <- numeric(N/2)
@@ -249,7 +257,7 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     # Note: All agents that initially responded to intervention always choose
     # Alt and receive h in each period:
     agent[which(agent$respond==1),"payoff"] <- h
-  
+    
     # Record agent data:
     agent_output[,,t] <- as.matrix(agent)
     
@@ -262,7 +270,6 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     # Record average payoffs:
     num_agents_sq <- length(agent[which(agent$choice==0),"choice"])
     summary_results$avg_payoff_sq[t] <- ifelse(num_agents_sq>0,sum(agent[which(agent$choice==0),"payoff"]) / num_agents_sq,NA) 
-    
     
     num_agents_alt <- length(agent[which(agent$choice==1),"choice"])
     summary_results$avg_payoff_alt[t] <- ifelse(num_agents_alt>0,sum(agent[which(agent$choice==1),"payoff"]) / num_agents_alt,NA) 
@@ -285,10 +292,10 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
 # The different parameter values to create all parameter combinations:
 
 param_combinations <- expand.grid(
-  alpha = c(2.5, 3),
+  alpha = c(2.5,3,8),
   target = c(0,1),
-  phi = c(0.5, 0.7, 0.9),
-  a = c(0.25, 0.75),
+  phi = c(0.25,0.5,0.75),
+  a = c(0.25,0.75),
   h = c(2,3)
 )
 
@@ -310,7 +317,7 @@ param_combinations <- expand.grid(
 N <- 1000
 t_max <- 100
 num_traits <- 6 # nr. of agents' traits needed to initialize averaged data frame
-n_sim <- 30 # nr. of simulation runs
+n_sim <- 1000 # nr. of simulation runs
 
 results_list <- list()  # to store results for each parameter combination
 
@@ -320,30 +327,46 @@ for (i in 1:nrow(param_combinations)) {
   current_params <- param_combinations[i, ]
   
   avg_summary_results <- data.frame(freq_coord_sq=rep(0,t_max), 
-                                freq_coord_alt=rep(0,t_max),
-                                freq_sq=rep(0,t_max),
-                                freq_alt=rep(0,t_max),
-                                avg_payoff_sq=rep(0,t_max),
-                                avg_payoff_alt=rep(0,t_max),
-                                avg_payoff=rep(0,t_max),
-                                gini_coefficient=rep(0,t_max),
-                                exp_sq=rep(0,t_max),
-                                exp_alt=rep(0,t_max))
+                                    low_ci_freq_coord_sq=rep(0,t_max),
+                                    high_ci_freq_coord_sq=rep(0,t_max),
+                                    freq_coord_alt=rep(0,t_max),
+                                    low_ci_freq_coord_alt=rep(0,t_max),
+                                    high_ci_freq_coord_alt=rep(0,t_max),
+                                    miscoordination=rep(0,t_max),
+                                    low_ci_miscoordination=rep(0,t_max),
+                                    high_ci_miscoordination=rep(0,t_max),
+                                    freq_sq=rep(0,t_max),
+                                    low_ci_freq_sq=rep(0,t_max),
+                                    high_ci_freq_sq=rep(0,t_max),
+                                    freq_alt=rep(0,t_max),
+                                    low_ci_freq_alt=rep(0,t_max),
+                                    high_ci_freq_alt=rep(0,t_max),
+                                    avg_payoff_sq=rep(0,t_max),
+                                    avg_payoff_alt=rep(0,t_max),
+                                    avg_payoff=rep(0,t_max),
+                                    low_ci_avg_payoff=rep(0,t_max),
+                                    high_ci_avg_payoff=rep(0,t_max),
+                                    gini_coefficient=rep(0,t_max),
+                                    low_ci_gini_coefficient=rep(0,t_max),
+                                    high_ci_gini_coefficient=rep(0,t_max),
+                                    exp_sq=rep(0,t_max),
+                                    exp_alt=rep(0,t_max))
   
-  # Initialize an array that will hold all agent_outputs from the individual
-  # simulation runs (note, we conduct "n_sim" runs):
-  # all_agent_output <- array(0, dim = c(N, num_traits, t_max, n_sim))
+  # Create data frame to store the following measures for each individual simulation run:
+  # freq_sq, freq_alt, avg_payoff, gini_coefficient (others may or may not be necessary)
+  # We do so, to use this data later to calculate confidence intervals:
   
-  # rename columns
-  # dimnames(all_agent_output) <- list(
-  #   agent = as.character(1:N),
-  #   trait = c("x_i", "respond", "exp_sq", "exp_alt", "choice", "payoff"),
-  #   period = 1:t_max,
-  #   n_sim = 1:n_sim
-  # )
-  
-  # Check the dimnames
-  # dimnames(all_agent_output)
+  freq_coord_sq_n_sim <- matrix(0,t_max,n_sim)
+  freq_coord_alt_n_sim <- matrix(0,t_max,n_sim)
+  miscoordination_n_sim <- matrix(0,t_max,n_sim)
+  freq_sq_n_sim <- matrix(0,t_max,n_sim)
+  freq_alt_n_sim <- matrix(0,t_max,n_sim)
+  # avg_payoff_sq_n_sim <- matrix(0,t_max,n_sim)
+  # avg_payoff_alt_n_sim <- matrix(0,t_max,n_sim)
+  avg_payoff_n_sim <- matrix(0,t_max,n_sim)
+  gini_coefficient_n_sim <- matrix(0,t_max,n_sim)
+  # exp_sq_n_sim <- matrix(0,t_max,n_sim)
+  # exp_alt_n_sim <- matrix(0,t_max,n_sim)
   
   # Run n_sim simulations:
   for (j in 1:n_sim) {
@@ -358,7 +381,7 @@ for (i in 1:nrow(param_combinations)) {
     # ggplot(data = data.frame(x = results$agent_output[,"x_i",1]), aes(x)) +
     #   geom_density() +
     #   labs(title = "Density Plot of x_i", x = "x_i", y = "Density")
-     
+    
     N <- N
     t_max <- t_max
     alpha <- current_params$alpha
@@ -367,8 +390,20 @@ for (i in 1:nrow(param_combinations)) {
     a <- current_params$a 
     h <- current_params$h
     
+    # Record following measures for individual n_sim simulation runs to then calculate confidence intervals 
+    freq_sq_n_sim[,j] <- results$summary_results$freq_sq
+    freq_alt_n_sim[,j] <- results$summary_results$freq_alt
+    freq_coord_sq_n_sim[,j] <- results$summary_results$freq_coord_sq
+    freq_coord_alt_n_sim[,j] <- results$summary_results$freq_coord_alt
+    miscoordination_n_sim[,j] <- results$summary_results$miscoordination
+    avg_payoff_n_sim[,j] <- results$summary_results$avg_payoff
+    gini_coefficient_n_sim[,j] <- results$summary_results$gini_coefficient
+    
+    
+    # Not add up the following measures to then later take averages:
     avg_summary_results$freq_coord_sq <- avg_summary_results$freq_coord_sq + results$summary_results$freq_coord_sq
     avg_summary_results$freq_coord_alt <- avg_summary_results$freq_coord_alt + results$summary_results$freq_coord_alt
+    avg_summary_results$miscoordination <- avg_summary_results$miscoordination + results$summary_results$miscoordination
     avg_summary_results$freq_sq <- avg_summary_results$freq_sq + results$summary_results$freq_sq
     avg_summary_results$freq_alt <- avg_summary_results$freq_alt + results$summary_results$freq_alt
     avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq + results$summary_results$avg_payoff_sq
@@ -386,6 +421,7 @@ for (i in 1:nrow(param_combinations)) {
   # averages of all the measures:
   avg_summary_results$freq_coord_sq <- avg_summary_results$freq_coord_sq / n_sim 
   avg_summary_results$freq_coord_alt <- avg_summary_results$freq_coord_alt / n_sim
+  avg_summary_results$miscoordination <- avg_summary_results$miscoordination / n_sim
   avg_summary_results$freq_sq <- avg_summary_results$freq_sq / n_sim 
   avg_summary_results$freq_alt <- avg_summary_results$freq_alt / n_sim
   avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq / n_sim 
@@ -395,9 +431,86 @@ for (i in 1:nrow(param_combinations)) {
   avg_summary_results$exp_sq <- avg_summary_results$exp_sq / n_sim 
   avg_summary_results$exp_alt <- avg_summary_results$exp_alt / n_sim
   
+  # Now that we have the mean values, averaged over the n_sim simulation runs, 
+  # we can calculate the confidence intervals of the following measures
+  
+  all_measures <- list()
+  
+  all_measures[[1]] <- freq_sq_n_sim
+  all_measures[[2]] <- freq_alt_n_sim
+  all_measures[[3]] <- freq_coord_sq_n_sim
+  all_measures[[4]] <- freq_coord_alt_n_sim
+  all_measures[[5]] <- miscoordination_n_sim
+  all_measures[[6]] <- avg_payoff_n_sim
+  all_measures[[7]] <- gini_coefficient_n_sim
+  
+  all_ci_values <- array(0, dim = c(t_max, 2, length(all_measures))) 
+  
+  # rename columns
+  dimnames(all_ci_values) <- list(
+    period = 1:t_max,
+    ci_values = c("lower_bound", "upper_bound"),
+    measures = c("freq_sq_n_sim", "freq_alt_n_sim", "freq_coord_sq_n_sim", "freq_coord_alt_n_sim", "miscoordination_n_sim", "avg_payoff_n_sim", "gini_coefficient_n_sim")
+  )
+  
+  for (k in 1:length(all_measures)) {
+    
+    # Number of bootstrap replicates
+    R <- 1000  
+    
+    # Create an empty matrix to store the confidence intervals
+    conf_intervals <- matrix(NA, nrow = t_max, ncol = 2)
+    
+    for (period in 1:t_max) {
+      # Go through the "all_measures" list and for each measure, extract the
+      # data for current period
+      data_to_bootstrap <- all_measures[[k]][period, ]
+      
+      # Initialize an empty vector to store bootstrap means
+      bootstrap_means <- numeric(R)
+      
+      # Perform bootstrapping R times
+      for (l in 1:R) {
+        # Resample the data with replacement
+        resampled_data <- sample(data_to_bootstrap, replace = TRUE)
+        
+        # Calculate the mean for the resampled data
+        bootstrap_means[l] <- mean(resampled_data)
+      }
+      
+      # Calculate the 2.5th and 97.5th percentiles for the confidence interval
+      lower_bound <- quantile(bootstrap_means, probs = 0.025)
+      upper_bound <- quantile(bootstrap_means, probs = 0.975)
+      
+      # Store the confidence interval in the "all_ci_values" matrix
+      all_ci_values[period,1,k] <- lower_bound
+      all_ci_values[period,2,k] <- upper_bound
+      
+    }
+    
+    # print(all_ci_values)
+    
+  }  
+  
+  # Record confidence intervals in avg_summary_results data frame
+  avg_summary_results$low_ci_freq_sq <- all_ci_values[,"lower_bound","freq_sq_n_sim"]
+  avg_summary_results$high_ci_freq_sq <- all_ci_values[,"upper_bound","freq_sq_n_sim"]
+  avg_summary_results$low_ci_freq_alt <- all_ci_values[,"lower_bound","freq_alt_n_sim"]
+  avg_summary_results$high_ci_freq_alt <- all_ci_values[,"upper_bound","freq_alt_n_sim"]
+  avg_summary_results$low_ci_freq_coord_sq <- all_ci_values[,"lower_bound","freq_coord_sq_n_sim"]
+  avg_summary_results$high_ci_freq_coord_sq <- all_ci_values[,"upper_bound","freq_coord_sq_n_sim"]
+  avg_summary_results$low_ci_freq_coord_alt <- all_ci_values[,"lower_bound","freq_coord_alt_n_sim"]
+  avg_summary_results$high_ci_freq_coord_alt <- all_ci_values[,"upper_bound","freq_coord_alt_n_sim"]
+  avg_summary_results$low_ci_miscoordination <- all_ci_values[,"lower_bound","miscoordination_n_sim"]
+  avg_summary_results$high_ci_miscoordination <- all_ci_values[,"upper_bound","miscoordination_n_sim"]
+  avg_summary_results$low_ci_avg_payoff <- all_ci_values[,"lower_bound","avg_payoff_n_sim"]
+  avg_summary_results$high_ci_avg_payoff <- all_ci_values[,"upper_bound","avg_payoff_n_sim"]
+  avg_summary_results$low_ci_gini_coefficient <- all_ci_values[,"lower_bound","gini_coefficient_n_sim"] 
+  avg_summary_results$high_ci_gini_coefficient <- all_ci_values[,"upper_bound","gini_coefficient_n_sim"] 
+  
   # Store averaged results and parameter values of given parameter combination in results_list:
   results_list[[i]] <- list(summary_results = avg_summary_results, # agent_output = all_agent_output, 
-                            n_sim=n_sim, N=N, t_max=t_max, num_traits= num_traits, alpha=alpha, target=target,
+                            n_sim=n_sim, N=N, t_max=t_max, num_traits=num_traits, alpha=alpha, target=target,
                             phi=phi, a=a, h=h)
 }
 
@@ -421,7 +534,7 @@ cleaned_names <- lapply(names(results_list), function(name) {
 
 cleaned_names <- unlist(cleaned_names)
 
-# Get current working directory
+# get current working directory
 results_dir <- getwd() 
 
 # Iterate through the results_list and save each result separately in 
@@ -430,7 +543,7 @@ for(i in 1:length(results_list)) {
   # Name for the subdirectory (and the file) based on the names of results_list
   folder_and_file_name <- cleaned_names[i]
   
-  # Check if directory exists and create it if it doesn't
+  # Check if directory exists and create if it doesn't
   if (!dir.exists(folder_and_file_name)) {
     dir.create(folder_and_file_name)
   }
@@ -444,7 +557,7 @@ for(i in 1:length(results_list)) {
   # Convert list item to an environment
   e <- list2env(list(result = results_list[[i]]))
   
-  # Save the environment
+  # save the environment
   save(list = "result", envir = e, file = file_path)
 }
 
