@@ -5,27 +5,41 @@
 rm(list=ls())
 
 ################################################################################
+################################################################################
 
 # Package dependencies:
 
-# "dineq" package to calculate Gini Coefficient.
-# Source: https://search.r-project.org/CRAN/refmans/dineq/html/gini.wtd.html
-# References: 
-#   Haughton, J. and S. Khandker. (2009) Handbook on poverty and inequality, Washington, DC: World Bank.
-#   Cowell F. (2000) Measurement of Inequality. In Atkinson A. and Bourguignon F. (eds.) Handbook of Income Distribution. Amsterdam: Elsevier, p. 87-166.
+# To calculate Gini coefficient:
 
-if (!requireNamespace("dineq", quietly = TRUE)) {
-  install.packages("dineq")
+# if (!requireNamespace("DescTools", quietly = TRUE)) {
+#   install.packages("DescTools")
+# }
+# 
+# library(DescTools)
+
+# Gini function: "Gini()"
+
+# Gini function (write my own function):
+# References: Gini (1912), Schmidt & Wichardt (2019):
+
+my_gini <- function(x) {
+  n <- length(x)  # Number of observations
+  
+  sum_x <- sum(x)  # Sum of observations
+  
+  sorted_x <- sort(x)  # Sort observations
+  
+  i <- 1:n
+  numerator <- sum(2 * i * sorted_x)
+  denominator <- n * sum_x
+  
+  gini <- numerator / denominator - (n + 1) / n
+  
+  return(gini)
 }
 
-library(dineq)
-
-# # For bootstrapping: 
-# if (!requireNamespace("boot", quietly = TRUE)) {
-#   install.packages("boot")
-# }
-# library(boot)
-
+################################################################################
+################################################################################
 ################################################################################
 
 # Simulation will be a function with the following parameters as arguments:
@@ -35,6 +49,8 @@ library(dineq)
 #  a = c(0.25, 0.75): payoff parameter
 #  h = c(2,3): payoff for choosing Alt for targeted agents who actually switch
 
+################################################################################
+################################################################################
 ################################################################################
 
 # Coordination game payoff matrix:
@@ -132,7 +148,7 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   summary_results$avg_payoff[1] <- sum(agent[,"payoff"])/N
   
   # Record (unweighted) gini coefficient for this first period before intervention:
-  summary_results$gini_coefficient[1] <- gini.wtd(agent[,"payoff"])
+  summary_results$gini_coefficient[1] <- my_gini(agent[,"payoff"])
   
   # Initialize array to record agents' traits over all periods:
   num_traits <- length(agent[1,])   # number of traits
@@ -277,7 +293,7 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     summary_results$avg_payoff[t] <- sum(agent[,"payoff"])/N
     
     # Calculate (unweighted) Gini Coefficient:
-    summary_results$gini_coefficient[t] <- gini.wtd(agent[,"payoff"])
+    summary_results$gini_coefficient[t] <- my_gini(agent[,"payoff"])
     
   }
   
@@ -292,10 +308,10 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
 # The different parameter values to create all parameter combinations:
 
 param_combinations <- expand.grid(
-  alpha = c(2.5,3,8),
+  alpha = c(2.25,2.5,2.75,3,8),
   target = c(0,1),
-  phi = c(0.25,0.5,0.75),
-  a = c(0.25,0.75),
+  phi = c(0.25,0.5,0.75,0.9),
+  a = c(0.25,0.75,0.9),
   h = c(2,3)
 )
 
@@ -314,7 +330,7 @@ param_combinations <- expand.grid(
 # where we draw random values from a uniform distribution to determine which 
 # agents actually respond to the intervention.
 
-N <- 1000
+N <- 10000
 t_max <- 100
 num_traits <- 6 # nr. of agents' traits needed to initialize averaged data frame
 n_sim <- 1000 # nr. of simulation runs
@@ -390,7 +406,7 @@ for (i in 1:nrow(param_combinations)) {
     a <- current_params$a 
     h <- current_params$h
     
-    # Record following measures for individual n_sim simulation runs to then calculate confidence intervals 
+    # Record following measures for all n_sim simulation runs
     freq_sq_n_sim[,j] <- results$summary_results$freq_sq
     freq_alt_n_sim[,j] <- results$summary_results$freq_alt
     freq_coord_sq_n_sim[,j] <- results$summary_results$freq_coord_sq
@@ -399,40 +415,20 @@ for (i in 1:nrow(param_combinations)) {
     avg_payoff_n_sim[,j] <- results$summary_results$avg_payoff
     gini_coefficient_n_sim[,j] <- results$summary_results$gini_coefficient
     
-    
-    # Not add up the following measures to then later take averages:
-    avg_summary_results$freq_coord_sq <- avg_summary_results$freq_coord_sq + results$summary_results$freq_coord_sq
-    avg_summary_results$freq_coord_alt <- avg_summary_results$freq_coord_alt + results$summary_results$freq_coord_alt
-    avg_summary_results$miscoordination <- avg_summary_results$miscoordination + results$summary_results$miscoordination
-    avg_summary_results$freq_sq <- avg_summary_results$freq_sq + results$summary_results$freq_sq
-    avg_summary_results$freq_alt <- avg_summary_results$freq_alt + results$summary_results$freq_alt
-    avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq + results$summary_results$avg_payoff_sq
-    avg_summary_results$avg_payoff_alt <- avg_summary_results$avg_payoff_alt + results$summary_results$avg_payoff_alt
-    avg_summary_results$avg_payoff <- avg_summary_results$avg_payoff + results$summary_results$avg_payoff
-    avg_summary_results$gini_coefficient <- avg_summary_results$gini_coefficient + results$summary_results$gini_coefficient
-    avg_summary_results$exp_sq <- avg_summary_results$exp_sq + results$summary_results$exp_sq
-    avg_summary_results$exp_alt <- avg_summary_results$exp_alt + results$summary_results$exp_alt
-    
-    # all_agent_output[,,,j] <- results$agent_output
-    
   }
   
   # After running n_sim simulations for a given parameter combination, we take
   # averages of all the measures:
-  avg_summary_results$freq_coord_sq <- avg_summary_results$freq_coord_sq / n_sim 
-  avg_summary_results$freq_coord_alt <- avg_summary_results$freq_coord_alt / n_sim
-  avg_summary_results$miscoordination <- avg_summary_results$miscoordination / n_sim
-  avg_summary_results$freq_sq <- avg_summary_results$freq_sq / n_sim 
-  avg_summary_results$freq_alt <- avg_summary_results$freq_alt / n_sim
-  avg_summary_results$avg_payoff_sq <- avg_summary_results$avg_payoff_sq / n_sim 
-  avg_summary_results$avg_payoff_alt <- avg_summary_results$avg_payoff_alt / n_sim
-  avg_summary_results$avg_payoff <- avg_summary_results$avg_payoff / n_sim
-  avg_summary_results$gini_coefficient <- avg_summary_results$gini_coefficient / n_sim
-  avg_summary_results$exp_sq <- avg_summary_results$exp_sq / n_sim 
-  avg_summary_results$exp_alt <- avg_summary_results$exp_alt / n_sim
+  avg_summary_results$freq_coord_sq <- rowMeans(freq_coord_sq_n_sim)
+  avg_summary_results$freq_coord_alt <- rowMeans(freq_coord_alt_n_sim)
+  avg_summary_results$miscoordination <- rowMeans(miscoordination_n_sim)
+  avg_summary_results$freq_sq <- rowMeans(freq_sq_n_sim)
+  avg_summary_results$freq_alt <- rowMeans(freq_alt_n_sim)
+  avg_summary_results$avg_payoff <- rowMeans(avg_payoff_n_sim)
+  avg_summary_results$gini_coefficient <- rowMeans(gini_coefficient_n_sim)
   
   # Now that we have the mean values, averaged over the n_sim simulation runs, 
-  # we can calculate the confidence intervals of the following measures
+  # we can calculate the bootstrapped confidence intervals:
   
   all_measures <- list()
   
@@ -456,7 +452,7 @@ for (i in 1:nrow(param_combinations)) {
   for (k in 1:length(all_measures)) {
     
     # Number of bootstrap replicates
-    R <- 1000  
+    R <- 999  
     
     # Create an empty matrix to store the confidence intervals
     conf_intervals <- matrix(NA, nrow = t_max, ncol = 2)
@@ -478,9 +474,18 @@ for (i in 1:nrow(param_combinations)) {
         bootstrap_means[l] <- mean(resampled_data)
       }
       
-      # Calculate the 2.5th and 97.5th percentiles for the confidence interval
-      lower_bound <- quantile(bootstrap_means, probs = 0.025)
-      upper_bound <- quantile(bootstrap_means, probs = 0.975)
+      mean_and_boot <- rep(0,1+R)
+      
+      mean_and_boot[1:R] <- bootstrap_means
+      mean_and_boot[R+1] <- rowMeans(all_measures[[5]])[period]
+        
+      ordered_means <- sort(mean_and_boot)
+      
+      index_low <- floor(0.025 * length(ordered_means))
+      lower_bound <- ordered_means[index_low]
+      
+      index_high <- ceiling(0.975 * length(ordered_means))
+      upper_bound <- ordered_means[index_high]
       
       # Store the confidence interval in the "all_ci_values" matrix
       all_ci_values[period,1,k] <- lower_bound
