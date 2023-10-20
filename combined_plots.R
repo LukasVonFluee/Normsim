@@ -117,7 +117,7 @@ for (i in 1:length(amenable_list)) {
   resistant_list[[i]]$summary_results$fract_high_ci_freq_alt <- resistant_list[[i]]$summary_results$high_ci_freq_alt / resistant_list[[i]]$N
   
   # plot par:
-  par(fig = c(0,0.5,0.5,1))
+  par(fig = c(0,0.45,0.5,1))
   
   # Alt choices amenable
   plot(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$fract_alt, type = "l", lwd = lineWidth,
@@ -127,7 +127,7 @@ for (i in 1:length(amenable_list)) {
        cex.axis = cexNum,cex.lab = cexWord)
        # Note, "at=..." in "mtext()" is relative to the x-axis. Here, the x-axis lies between 0-100:
        mtext('a',side = 3,at = -15,line = 1,cex = 1.5 * cexWord)
-       mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
+       # mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
   
   # Add confidence intervals
   lines(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$fract_low_ci_freq_alt, col = "darkgreen", lty = 2)
@@ -153,7 +153,7 @@ for (i in 1:length(amenable_list)) {
   
   ###################################################################################
   
-  par(fig = c(0.5,1,0.5,1),new = T)
+  par(fig = c(0.45,0.9,0.5,1),new = T)
   
   # Create the initial line plot with frequencies of miscoordination for amenable targets
   plot(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$miscoordination, type = "l",
@@ -161,9 +161,9 @@ for (i in 1:length(amenable_list)) {
        # main = "b) Coordination on SQ and Alt",
        col = "darkgreen", ylim = c(0, amenable_list[[i]]$N/2),
        cex.axis = cexNum,cex.lab = cexWord,lwd = lineWidth)
-  # Note, "at=..." in "mtext()" is relative to the x-axis. Here, the x-axis lies between 0-100:
-  mtext('b',side = 3,at = -15,line = 0.75,cex = 1.5 * cexWord)
-  mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
+       # Note, "at=..." in "mtext()" is relative to the x-axis. Here, the x-axis lies between 0-100:
+       mtext('b',side = 3,at = -15,line = 0.75,cex = 1.5 * cexWord)
+       # mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
   
   # Add confidence intervals (amenable)
   lines(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$low_ci_miscoordination, col = "darkgreen", lty = 2, lwd = 0.75)
@@ -187,7 +187,7 @@ for (i in 1:length(amenable_list)) {
   
   ###################################################################################
   
-  par(fig = c(0,0.5,0,0.5),new = T)
+  par(fig = c(0,0.45,0,0.5),new = T)
   
   # Create the initial line plot with Average payoffs for amenable targets
   plot(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$avg_payoff, type = "l",
@@ -195,9 +195,9 @@ for (i in 1:length(amenable_list)) {
        # main = "c) Average payoffs",
        col = "darkgreen", ylim = c(0, amenable_list[[i]]$h),
        cex.axis = cexNum,cex.lab = cexWord,lwd = lineWidth)
-  # Note, "at=..." in "mtext()" is relative to the x-axis. Here, the x-axis lies between 0-100:
-  mtext('c',side = 3,at = -15,line = 0.75,cex = 1.5 * cexWord) 
-  mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
+       # Note, "at=..." in "mtext()" is relative to the x-axis. Here, the x-axis lies between 0-100:
+       mtext('c',side = 3,at = -15,line = 0.75,cex = 1.5 * cexWord) 
+       # mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
   
   # Add confidence intervals (amenable)
   lines(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$low_ci_avg_payoff, col = "darkgreen", lty = 2, lwd = 0.75)
@@ -217,11 +217,11 @@ for (i in 1:length(amenable_list)) {
 
   ###################################################################################
   
-  # Plot 4: Gini coefficient (Upper right)
+  # Plot 4: Gini coefficient (Lower right)
   
   ###################################################################################
   
-  par(fig = c(0.5,1,0,0.5),new = T)
+  par(fig = c(0.45,0.9,0,0.5),new = T)
   
   # Create the initial line plot with Gini coefficients for amenable targets
   plot(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$gini_coefficient, type = "l",
@@ -229,9 +229,9 @@ for (i in 1:length(amenable_list)) {
        # main = "d) Gini coefficient",
        col = "darkgreen", ylim = c(0, 1),
        cex.axis = cexNum,cex.lab = cexWord,lwd = lineWidth)
-  # Note, "at=..." in "mtext()" is relative to the x-axis. Here, the x-axis lies between 0-100:
-  mtext('d',side = 3,at = -15,line = 0.75,cex = 1.5 * cexWord)
-  mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
+       # Note, "at=..." in "mtext()" is relative to the x-axis. Here, the x-axis lies between 0-100:
+       mtext('d',side = 3,at = -15,line = 0.75,cex = 1.5 * cexWord)
+       # mtext(label,at = 50,line = 1,cex = cexWord, adj=0.5)
   
   # Add confidence intervals (amenable)
   lines(1:amenable_list[[i]]$t_max, amenable_list[[i]]$summary_results$low_ci_gini_coefficient, col = "darkgreen", lty = 2)
@@ -248,6 +248,16 @@ for (i in 1:length(amenable_list)) {
   # legend("topright", legend = c("Amenable", "95% CI", "Resistant", "95% CI"),
   #        col = c("darkgreen", "darkgreen", "red", "red"),
   #        lty = c(1, 2, 1, 2))  
+  
+  alpha_val <- bquote(italic(alpha) == .(amenable_list[[i]]$alpha))
+  beta_val <- bquote(italic(beta) == .(2))
+  
+  par(fig = c(0.9,1,0,1),new = T)
+  par(mar=c(0,0,0,0))
+  plot(0:1,0:1,xlab='',ylab='',type = 'l',lty = 'blank',axes=F)
+  text(0.05, 0.52, alpha_val, cex = cexWord, adj = 0)
+  text(0.05, 0.48, beta_val, cex = cexWord, adj = 0)
+  
   
   dev.off()
   
