@@ -538,7 +538,7 @@ for (i in 1:nrow(param_combinations)) {
       mean_and_boot <- rep(0,1+R)
       
       mean_and_boot[1:R] <- bootstrap_means
-      mean_and_boot[R+1] <- rowMeans(all_measures[[5]])[period]
+      mean_and_boot[R+1] <- rowMeans(all_measures[[k]])[period]
         
       ordered_means <- sort(mean_and_boot)
       
