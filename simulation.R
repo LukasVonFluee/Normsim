@@ -6,27 +6,18 @@ rm(list=ls())
 ################################################################################
 ################################################################################
 
-# Package dependencies:
-
-# To calculate Gini coefficient:
-
-# if (!requireNamespace("DescTools", quietly = TRUE)) {
-#   install.packages("DescTools")
-# }
-# 
-# library(DescTools)
-
-# Gini function: "Gini()"
-
-# Gini function (write my own function):
+# Gini function (write our own function):
 # References: Gini (1912), Schmidt & Wichardt (2019):
 
+# The argument of the function, x, will consist of an array including the 
+# agents' payoffs.
+
 my_gini <- function(x) {
-  n <- length(x)  # Number of observations
+  n <- length(x)  
   
-  sum_x <- sum(x)  # Sum of observations
+  sum_x <- sum(x) 
   
-  sorted_x <- sort(x)  # Sort observations
+  sorted_x <- sort(x)  
   
   i <- 1:n
   numerator <- sum(2 * i * sorted_x)
@@ -41,12 +32,8 @@ my_gini <- function(x) {
 ################################################################################
 ################################################################################
 
-# Simulation will be a function with the following parameters as arguments:
-#  alpha = c(3,8): beta distribution parameter
-#  target = c(0, 1): target=0 = target N*phi most amenable, where N = nr. agents
-#  phi = c(0.25, 0.5, 0.75): fraction of targeted agents
-#  a = c(0.25, 0.75): payoff parameter
-#  h = c(2,3): payoff for choosing Alt for targeted agents who actually switch
+# The parameter values and combinations can be changed further below.
+# Search for "param_combinations".
 
 ################################################################################
 ################################################################################
@@ -69,19 +56,23 @@ my_gini <- function(x) {
 
 # Notes:
 
-# INTERVENTION: As discussed with Charles, we do intervention before first 
-# period because we are only interested in dynamics after the intervention.
-# Agents switch with a probability = 1-(x_i/(d-b)). Note, q=x_i/(d-b) is simply
-# the fraction of agents choosing Alt that makes an agent indifferent between
-# choosing Alt and SQ. Further in the paper it is assumed that a given agent 
-# switches to Alt if the expected payoff of Alt is >= expected payoff of SQ.
+# An intervention is implemented in the first period because we are only 
+# interested in dynamics after the intervention. The first period represents
+# the steady state before the intervention, namely an equilibrium with SQ as
+# the prevalent social norm. SQ is assumed to be the equilibrium norm because
+# it risk dominates Alt (see paper for more information).
+# Agents respond with a probability = 1-(x_i/(d-b)) to the intervention. 
+# Note, q=x_i/(d-b) is simply the fraction of agents choosing Alt that makes an 
+# agent indifferent between choosing Alt and SQ. Further, in the paper it is 
+# assumed that an agent switches to Alt if the expected payoff of Alt is >= the
+# expected payoff of SQ.
 
 sim <- function (N, t_max, alpha, target, phi, a, h) {
   
   # Parameters specifying payoffs in coordination game that we don't vary:
   b <- 0
   d <- 1    
-  g <- 0 # payoff for choosing SQ for targeted agents who switch
+  g <- 0 # payoff for choosing SQ for targeted agents who respond
   
   # Initialize data frame in which we store coordination results
   summary_results <- data.frame(freq_coord_sq=rep(0,t_max), 
@@ -141,15 +132,19 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   # Check the dimnames
   # dimnames(agent_output)
   
-  # In an SQ equilibrium, agent$q=0 
-  # We let them play the coordination game:
-  # This is t=1
+  # Before t=1, we have an SQ equilibrium, and thus; agent$q=0
+  # In t=1, agents play the coordination game given the belief q=0.
+  
   t <- 1
   
-  # Beliefs
+  # Beliefs (could also just define q<-0 because we start from an equilibrium where
+  # everyone chooses SQ: q is the belief of agent i that the next agent i will
+  # get paired off with chooses Alt, and this is based on the distribution of 
+  # Alt choices of the previous round. 
+  # However, we want to always use the same formula to calculate belief q:
   agent$q <- ifelse(agent$choice==0, sum(agent$choice)/(N-1), ((sum(agent$choice)-1)/(N-1)))
   
-  #Expected payoffs:
+  # Expected payoffs based on q=0:
   agent$exp_sq <- ((1-agent$q)*(a + agent$x_i)) + (agent$q*(b+agent$x_i))
   agent$exp_alt <- (1-agent$q)*a + agent$q*d
   
@@ -161,10 +156,11 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   # exp_alt >= exp_sq:
   agent$choice <- ifelse(agent$exp_alt>=agent$exp_sq, 1, 0)
   
-  # Create array of randomized indices
+  # Create array of randomized indices to prepare for random matching
   shuffled_indices <- sample(N)
   
-  # Split shuffled indices into two halves
+  # Split shuffled indices into two halves which represent the two parties 
+  # getting paired off in dyadic groups
   player_1 <- shuffled_indices[1:(N/2)]
   player_2 <- shuffled_indices[((N/2)+1):N]
   
@@ -177,12 +173,13 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   both_alt <- choice_player_1 == 1 & choice_player_2 == 1
   freq_coord_sq <- sum(both_sq)
   freq_coord_alt <- sum(both_alt)
+  
   # Store results in 'summary_results' data frame:
   summary_results$freq_coord_sq[t] <- freq_coord_sq
   summary_results$freq_coord_alt[t] <- freq_coord_alt
   summary_results$miscoordination[t] <- (N/2) - freq_coord_sq - freq_coord_alt
   
-  # Calculate payoffs:
+  # Calculate realized payoffs:
   payoff_player_1 <- numeric(N/2)
   payoff_player_2 <- numeric(N/2)
   
@@ -190,16 +187,16 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   payoff_player_1[both_sq] <- a + agent$x_i[player_1][both_sq]
   payoff_player_2[both_sq] <- a + agent$x_i[player_2][both_sq]
   
-  # If both coordinate on Alt, payoff is 'd' for non-targeted agents and 
-  # for agents who were targeted but didn't switch:
+  # If both coordinate on Alt, payoff is 'd' for non-targeted agents, as well as 
+  # for agents who were targeted but didn't respond:
   payoff_player_1[both_alt] <- d
   payoff_player_2[both_alt] <- d
   
-  # If player 1 chooses SQ and player 2 chooses Alt:
+  # Payoffs when player 1 chooses SQ and player 2 chooses Alt:
   payoff_player_1[choice_player_1 == 0 & choice_player_2 == 1] <- b + agent$x_i[player_1][choice_player_1 == 0 & choice_player_2 == 1] 
   payoff_player_2[choice_player_1 == 0 & choice_player_2 == 1] <- a
   
-  # If player 1 chooses Alt and player 2 chooses SQ:
+  # Payoffs when player 1 chooses Alt and player 2 chooses SQ:
   payoff_player_1[choice_player_1 == 1 & choice_player_2 == 0] <- a
   payoff_player_2[choice_player_1 == 1 & choice_player_2 == 0] <- b + agent$x_i[player_2][choice_player_1 == 1 & choice_player_2 == 0] 
   
@@ -225,9 +222,15 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
   
   summary_results$avg_payoff[t] <- sum(agent[,"payoff"])/N
   
-  # Calculate (unweighted) Gini Coefficient:
+  # Calculate and store Gini coefficient:
   summary_results$gini_coefficient[t] <- my_gini(agent[,"payoff"])
   
+  #############################################################################  
+  #############################################################################  
+  
+  # INTERVENTION
+  
+  #############################################################################  
   #############################################################################  
   
   # Intervention (note, if target=0, we target amenable, else resistant)
@@ -241,20 +244,22 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     # We make response a decreasing function of threshold values and define
     # the probability to switch as; 1-(agent$x_i/(d-b))
     prob_draw <- runif(N*phi)
-    agent$choice[1:(N*phi)] <- ifelse(prob_draw<=(1-(agent$x_i[1:(N*phi)]/(d-b))), 1, 0)  
+    agent$respond[1:(N*phi)] <- ifelse(prob_draw<=(1-(agent$x_i[1:(N*phi)]/(d-b))), 1, 0)  
   } else if(target==1) {
     # print("target=1")
     # If we target most resistant, we order in decreasing order:
     agent <- agent[order(agent$x_i, decreasing = TRUE), ]
     prob_draw <- runif(N*phi)
-    agent$choice[1:(N*phi)] <- ifelse(prob_draw<=(1-(agent$x_i[1:(N*phi)]/(d-b))), 1, 0)  
+    agent$respond[1:(N*phi)] <- ifelse(prob_draw<=(1-(agent$x_i[1:(N*phi)]/(d-b))), 1, 0)  
   }
   
-  # For those agents who switched, expected payoff for choosing SQ will be 'g' 
-  # for the rest of periods, and expected payoff for choosing Alt will be 'h'. 
-  # Current solution to always assign those agents these expected payoffs: 
-  # Mark those agents who actually responded to intervention and switched to Alt
-  agent$respond <- agent$choice
+  #############################################################################  
+  # Now that intervention happened, we know that certain agents responded. 
+  # For those agents who repond to intervention, choosing SQ
+  # now will yield a payoff=g in every future period, and choosing Alt will 
+  # yield a payoff=h, where h>g. 
+  # The payoff structures for the other agents do not change.
+  # Agents will now play the coordination game for (t_max - 1) periods.
   
   #############################################################################  
   
@@ -266,7 +271,7 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     # Calculate expected payoffs:
     
     # Note: agent$respond=1 refers to those agents who were targeted by 
-    # intervention and actually switched choice. For them, we have that:
+    # intervention and actually responded. For them, we have that:
     # exp_sq <- g and exp_alt <- h
     agent[which(agent$respond==1),"exp_sq"] <- g
     agent[which(agent$respond==1),"exp_alt"] <- h
@@ -353,7 +358,7 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
     
     summary_results$avg_payoff[t] <- sum(agent[,"payoff"])/N
     
-    # Calculate (unweighted) Gini Coefficient:
+    # Calculate and store Gini coefficient:
     summary_results$gini_coefficient[t] <- my_gini(agent[,"payoff"])
     
   }
@@ -366,13 +371,14 @@ sim <- function (N, t_max, alpha, target, phi, a, h) {
 
 ################################################################################
 ################################################################################
-# The different parameter values to create all parameter combinations:
+
+# Parameter values:
 
 param_combinations <- expand.grid(
-  alpha = c(2.5, 2.75, 3, 8),
+  alpha = c(2.25,2.5, 2.75, 3, 8),
   target = c(0,1),
-  phi = c(0.25,0.5,0.75),
-  a = c(0.25,0.75),
+  phi = c(0.25,0.5,0.75,0.9),
+  a = c(0.25,0.75,0.9),
   h = c(2,3)
 )
 
@@ -384,7 +390,7 @@ param_combinations <- expand.grid(
 ################################################################################
 ################################################################################
 
-# Run simulations 100 times per parameter combination to account for the random 
+# Run simulations n_sim times per parameter combination to account for the random 
 # x values drawn from the beta distribution, which could significantly influence 
 # the results of a given simulation.
 # It also accounts for another random process in the simulation function, namely
@@ -393,9 +399,8 @@ param_combinations <- expand.grid(
 
 N <- 1000
 t_max <- 100
-num_traits <- 7 # nr. of agents' traits needed to initialize averaged data frame
 n_sim <- 1000 # nr. of simulation runs
-
+# num_traits <- 7
 results_list <- list()  # to store results for each parameter combination
 
 # Go through all the different parameter combinations
@@ -576,8 +581,8 @@ for (i in 1:nrow(param_combinations)) {
   
   # Store averaged results and parameter values of given parameter combination in results_list:
   results_list[[i]] <- list(summary_results = avg_summary_results, # agent_output = all_agent_output, 
-                            n_sim=n_sim, N=N, t_max=t_max, num_traits=num_traits, alpha=alpha, target=target,
-                            phi=phi, a=a, h=h)
+                            n_sim=n_sim, N=N, t_max=t_max, # num_traits=num_traits, 
+                            alpha=alpha, target=target, phi=phi, a=a, h=h)
 }
 
 ################################################################################
